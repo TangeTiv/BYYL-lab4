@@ -3,6 +3,9 @@
 #include <sstream>
 #include <string>
 #include <fstream>
+#include <set>
+#include <iterator>
+#include <algorithm>
 #define MaxProLength 20
 #define MaxSetSize 200
 #define MaxGramSize 100
@@ -18,10 +21,13 @@ struct production
 };
 
 vector<string> signset(MaxSetSize+1); // 符号集合
-int endcnt = 0; // 终结符数目
+int endcnt = 1; // 终结符数目
 int noncnt = 0; // 非终结符号数目
-int START = -1; // 开始符
+int START = 0; // 开始符
+// signset[100] = "#";
 vector <production> grammal; // 产生式集合
+
+
 struct LRItem
 {
     int rule; // 生成式
@@ -120,6 +126,74 @@ int saveinfo(string file)
     return 0;
 }
 
+vector <set<int>> Firstset;
+vector <set<int>> Followsets;
+set <int> First(int n)
+{
+    if(n < 100)
+    {
+        return Firstset[n];
+    }
+    set<int> tmp;
+    tmp.insert(n);
+    return tmp;
+}
+
+int genFirst()
+{
+    // Firstset 按非终结符编号索引，而不是按产生式编号
+    Firstset.resize(noncnt);
+
+    int flag;
+    do
+    {
+        flag = 0;
+        int size = grammal.size();
+        for(int i = 0; i < size; i++)
+        {
+            int left = grammal[i].left;         // 产生式左部（非终结符下标）
+            int len = grammal[i].length;
+            bool cont = true;                   // 当前所有符号都可空 → 继续
+
+            for(int k = 0; cont && k < len; k++)
+            {
+                int n = grammal[i].right[k];
+                set<int> A = First(n);          // 符号 n 的 FIRST 集
+
+                // 将 A 中除 ε(100) 外的元素加入 Firstset[left]
+                for(int x : A)
+                {
+                    if(x != 100)
+                    {
+                        if(Firstset[left].find(x) == Firstset[left].end())
+                        {
+                            Firstset[left].insert(x);
+                            flag = 1;           // 有变化，需要继续迭代
+                        }
+                    }
+                }
+
+                // 如果 A 不含 100（不可空），停止往后看
+                if(A.find(100) == A.end())
+                {
+                    cont = false;
+                }
+                // 否则（可空）→ cont 保持 true，继续看下一个符号
+            }
+
+            // 所有符号都可空 → 将 100(ε) 加入 FIRST
+            if(cont && Firstset[left].find(100) == Firstset[left].end())
+            {
+                Firstset[left].insert(100);
+                flag = 1;
+            }
+        }
+    } while(flag == 1);
+
+    return 0;
+}
+
+
 int main()
 {
     saveinfo("testdata.txt");
@@ -132,5 +206,24 @@ int main()
         }
         cout<<endl;
     }
+
+    // 测试 genFirst
+    genFirst();
+    cout << "\n========== FIRST  ==========" << endl;
+    for(int i = 0; i < noncnt; i++)
+    {
+        cout << "FIRST(" << signset[i] << ") = { ";
+        for(auto it = Firstset[i].begin(); it != Firstset[i].end(); it++)
+        {
+            if(*it == 100)
+                cout << "#";
+            else
+                cout << signset[*it];
+            if(next(it) != Firstset[i].end())
+                cout << ", ";
+        }
+        cout << " }" << endl;
+    }
+    cout << "==============================" << endl;
 }
 
