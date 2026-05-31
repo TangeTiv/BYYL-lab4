@@ -7,6 +7,7 @@
 #define MaxSetSize 200
 #define MaxGramSize 100
 #define Gap 100
+#define MaxK  5
 using namespace std;
 
 struct production
@@ -21,11 +22,14 @@ int endcnt = 0; // 终结符数目
 int noncnt = 0; // 非终结符号数目
 int START = -1; // 开始符
 vector <production> grammal; // 产生式集合
-struct Item
+struct LRItem
 {
     int rule; // 生成式
     int pos; // . 的位置
+    int preview[MaxK];
+    int k; 
 };
+
 
 vector<string> SplitStr(string line, char dep = ' ')
 {
