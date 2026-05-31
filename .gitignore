@@ -1,0 +1,36 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# VS Code
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+venv/
+.venv/
+
+# Java
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+build/
+target/
+
+# Gradle
+.gradle/
+
+# Maven
+log/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Others
+*.log
+*.tmp
