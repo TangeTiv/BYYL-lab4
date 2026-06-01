@@ -9,6 +9,10 @@ public:
 
     // LR(0) 冲突检测
     bool isLR0() const;
+    // SLR(1) 冲突检测（利用 FOLLOW 集解决 LR(0) 冲突）
+    bool isSLR1() const;
+    // SLR(1) 冲突检测，返回详细冲突信息
+    bool isSLR1(std::string& conflicts) const;
 
     // 输出
     void print(std::ostream& out) const override;

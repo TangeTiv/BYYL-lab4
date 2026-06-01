@@ -35,16 +35,23 @@ int Grammar::findpos(const std::string& str) const {
 }
 
 int Grammar::loadFromFile(const std::string& file) {
-    std::string line;
-    std::vector<std::string> lines;
     std::ifstream input(file);
     if(!input.is_open()) {
         std::cerr << "Cannot open file: " << file << std::endl;
         return -1;
     }
-    while(getline(input, line))
-        lines.push_back(line);
+    std::string content((std::istreambuf_iterator<char>(input)),
+                         std::istreambuf_iterator<char>());
     input.close();
+    return loadFromString(content);
+}
+
+int Grammar::loadFromString(const std::string& content) {
+    std::vector<std::string> lines;
+    std::string line;
+    std::istringstream stream(content);
+    while(std::getline(stream, line))
+        lines.push_back(line);
 
     // 第一遍：收集所有唯一的非终结符
     for(auto& it : lines) {
@@ -198,6 +205,12 @@ int Grammar::computeFollow() {
     } while(flag == 1);
 
     return 0;
+}
+
+// ============ 符号查找（公有） ============
+
+int Grammar::lookupSymbol(const std::string& s) const {
+    return findpos(s);
 }
 
 // ============ 增广产生式 ============

@@ -21,6 +21,11 @@ public:
     // LALR(1) 冲突检测
     bool isLALR1() const;
 
+    // 访问 LR(0) 状态与转移（供分析表构建使用）
+    const std::vector<LRItemSet>& getLr0States() const { return lr0_->getStates(); }
+    const std::vector<TransitionList>& getLr0Transitions() const { return lr0_->getTransitions(); }
+    const Grammar& getGrammar() const { return *grammar_; }
+
     // 访问 lookahead（供后续表构建使用）
     const std::set<int>& getLookahead(int state, int rule, int pos) const;
 

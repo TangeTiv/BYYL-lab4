@@ -1,5 +1,6 @@
 #include "LR0DFA.h"
 #include <fstream>
+#include <map>
 
 LR0DFA::LR0DFA(const Grammar& g) : DFA(g) {}
 
@@ -87,10 +88,115 @@ bool LR0DFA::isLR0() const {
     return true;
 }
 
+// SLR(1) 冲突检测（基于 FOLLOW 集，含详细冲突信息）
+bool LR0DFA::isSLR1(std::string& conflicts) const {
+    const auto& prods = grammar_->getProductions();
+
+    for(auto& state : states_) {
+        std::map<int, int> shiftSyms;
+        std::vector<int> reduceRules;
+
+        for(auto item : state) {
+            int r = item.rule, p = item.pos;
+            if(p == (int)prods[r].length) {
+                reduceRules.push_back(r);
+            } else {
+                int X = prods[r].right[p];
+                if(X >= Gap)
+                    shiftSyms[X] = 1;
+            }
+        }
+
+        for(auto& sr : shiftSyms) {
+            int sym = sr.first;
+            for(int r : reduceRules) {
+                auto followSet = grammar_->getFollow(prods[r].left);
+                if(followSet.find(sym) != followSet.end()) {
+                    conflicts += "State " + std::to_string((int)(&state - &states_[0]))
+                        + ": SR conflict — shift \"" + grammar_->getSignSet()[sym]
+                        + "\" in FOLLOW(" + grammar_->getSignSet()[prods[r].left] + ")\n";
+                    return false;
+                }
+            }
+        }
+
+        for(size_t i = 0; i < reduceRules.size(); i++) {
+            for(size_t j = i + 1; j < reduceRules.size(); j++) {
+                auto f1 = grammar_->getFollow(prods[reduceRules[i]].left);
+                auto f2 = grammar_->getFollow(prods[reduceRules[j]].left);
+                for(int sym : f1) {
+                    if(f2.find(sym) != f2.end()) {
+                        conflicts += "State " + std::to_string((int)(&state - &states_[0]))
+                            + ": RR conflict — "
+                            + grammar_->getSignSet()[prods[reduceRules[i]].left]
+                            + " and " + grammar_->getSignSet()[prods[reduceRules[j]].left]
+                            + " both have " + (sym == MaxSetSize ? "$" : grammar_->getSignSet()[sym]) + "\n";
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    conflicts = "无冲突";
+    return true;
+}
+
+// SLR(1) 冲突检测（基于 FOLLOW 集）
+bool LR0DFA::isSLR1() const {
+    const auto& prods = grammar_->getProductions();
+
+    for(auto& state : states_) {
+        std::map<int, int> shiftSyms;     // 移进符号 → 计数
+        std::vector<int> reduceRules;     // 可归约的产生式
+
+        for(auto item : state) {
+            int r = item.rule, p = item.pos;
+            if(p == (int)prods[r].length) {
+                reduceRules.push_back(r);
+            } else {
+                int X = prods[r].right[p];
+                if(X >= Gap)
+                    shiftSyms[X] = 1;
+            }
+        }
+
+        // 检查 SR 冲突：移进符号是否在归约项的 FOLLOW 集中
+        for(auto& sr : shiftSyms) {
+            int sym = sr.first;
+            for(int r : reduceRules) {
+                auto followSet = grammar_->getFollow(prods[r].left);
+                if(followSet.find(sym) != followSet.end()) {
+                    std::cout << "  SLR(1) SR conflict in state: shift "
+                              << grammar_->getSignSet()[sym]
+                              << " in FOLLOW(" << grammar_->getSignSet()[prods[r].left] << ")" << std::endl;
+                    return false;
+                }
+            }
+        }
+
+        // 检查 RR 冲突：归约项的 FOLLOW 集是否有交集
+        for(size_t i = 0; i < reduceRules.size(); i++) {
+            for(size_t j = i + 1; j < reduceRules.size(); j++) {
+                auto f1 = grammar_->getFollow(prods[reduceRules[i]].left);
+                auto f2 = grammar_->getFollow(prods[reduceRules[j]].left);
+                for(int sym : f1) {
+                    if(f2.find(sym) != f2.end()) {
+                        std::cout << "  SLR(1) RR conflict in state: "
+                                  << grammar_->getSignSet()[prods[reduceRules[i]].left]
+                                  << " and " << grammar_->getSignSet()[prods[reduceRules[j]].left]
+                                  << " both have " << (sym == MaxSetSize ? "$" : grammar_->getSignSet()[sym]) << std::endl;
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
 // 输出到控制台
 void LR0DFA::print(std::ostream& out) const {
     const auto& signs = grammar_->getSignSet();
-    const auto& prods = grammar_->getProductions();
 
     out << "\n========== LR(0) DFA ==========" << std::endl;
     out << states_.size() << " states, " << edgeCount_ << " edges" << std::endl << std::endl;
@@ -112,6 +218,11 @@ void LR0DFA::print(std::ostream& out) const {
         out << "This grammar is LR(0)." << std::endl;
     else
         out << "This grammar is NOT LR(0)." << std::endl;
+
+    if(isSLR1())
+        out << "This grammar is SLR(1)." << std::endl;
+    else
+        out << "This grammar is NOT SLR(1)." << std::endl;
 }
 
 // 保存 DOT 图

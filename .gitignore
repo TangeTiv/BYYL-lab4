@@ -1,36 +1,26 @@
-# IntelliJ IDEA
-.idea/
-*.iml
-out/
+# Build artifacts
+release/
+debug/
+Makefile
+Makefile.Release
+Makefile.Debug
+.qmake.stash
+*.o
 
-# VS Code
-.vscode/
+# Generated files
+*.dot
+*.svg
+*.bak
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-venv/
-.venv/
+# Qt Creator
+.qtc_clangd/
+*.pro.user
+*.pro.user.*
 
-# Java
-*.class
-*.jar
-!gradle/wrapper/gradle-wrapper.jar
-build/
-target/
-
-# Gradle
-.gradle/
-
-# Maven
-log/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Others
-*.log
-*.tmp
+# Temp files
+_backup/
+_temp_grammar_.txt
+test_output.svg
+minimal_test.cpp
+test_main.cpp
+test_qt.cpp

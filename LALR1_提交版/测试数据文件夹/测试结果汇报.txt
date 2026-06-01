@@ -1,0 +1,43 @@
+======================================
+  LALR(1) 语法分析生成器 — 测试结果汇报
+======================================
+
+一、测试环境
+------------------
+  操作系统：Windows 11
+  编译器：MinGW-W64 GCC 13.1.0
+  Qt 版本：Qt 6.9.1 (MinGW 64-bit)
+
+二、测试文法（共 4 个）
+------------------
+  文法1 — 括号文法（testdata_simple.txt  /  testdata.txt）
+    A -> ( A ) | a
+
+  文法2 — 加法乘法算术文法（testdata_arith.txt）
+    E -> E + T | T
+    T -> T * F | F
+    F -> ( E ) | n
+
+  文法3 — if-else 条件文法（testdata_ifelse.txt）
+    stmt -> if exp then stmt | if exp then stmt else stmt | other
+    exp -> true | false
+
+  文法4 — 表达式文法（testdata_exp.txt）
+    exp -> exp addop term | term
+    addop -> + | -
+    term -> term mulop factor | factor
+    mulop -> * | /
+    factor -> ( exp ) | n
+
+三、测试结果（以截图展示）
+------------------
+
+ 文法4
+
+![image-20260601232759602](C:\Users\谭\AppData\Roaming\Typora\typora-user-images\image-20260601232759602.png)
+
+![image-20260601232819090](C:\Users\谭\AppData\Roaming\Typora\typora-user-images\image-20260601232819090.png)![image-20260601232836104](C:\Users\谭\AppData\Roaming\Typora\typora-user-images\image-20260601232836104.png)![image-20260601232847354](C:\Users\谭\AppData\Roaming\Typora\typora-user-images\image-20260601232847354.png)![image-20260601232858755](C:\Users\谭\AppData\Roaming\Typora\typora-user-images\image-20260601232858755.png)
+
+四、测试结论
+------------------
+  4 个测试文法的所有功能均通过测试，系统运行正常稳定。

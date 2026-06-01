@@ -15,6 +15,8 @@ public:
 
     // 从文件读入文法
     int loadFromFile(const std::string& filename);
+    // 从字符串读入文法（避免文件编码问题）
+    int loadFromString(const std::string& content);
     // 添加增广产生式 S' → S $
     void addAugmentedProduction();
     // 计算 FIRST 集
@@ -37,6 +39,9 @@ public:
     int getNoncnt() const { return noncnt_; }
     int getEndcnt() const { return endcnt_; }
     int getSTART() const { return START_; }
+
+    // 查找符号索引（公有包装，供 LALR1Parser 做句子词法分析）
+    int lookupSymbol(const std::string& s) const;
 
     // 工具函数
     static std::vector<std::string> split(const std::string& line, char dep = ' ');
