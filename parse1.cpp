@@ -21,10 +21,9 @@ struct production
 };
 
 vector<string> signset(MaxSetSize+1); // 符号集合
-int endcnt = 1; // 终结符数目
+int endcnt = 2; // 终结符数目（含预定义的 # 和 $）
 int noncnt = 0; // 非终结符号数目
 int START = 0; // 开始符
-// signset[100] = "#";
 vector <production> grammal; // 产生式集合
 
 
@@ -66,6 +65,10 @@ int findpos(vector<string>tokens, string str)
 }
 int saveinfo(string file)
 {
+    // 初始化预定义符号： #(句子结束) 和 $(文法结束)
+    signset[Gap] = "#";
+    signset[MaxSetSize] = "$";
+
     string line;
     vector<string> lines;
     ifstream input(file);
@@ -130,7 +133,7 @@ vector <set<int>> Firstset;
 vector <set<int>> Followsets;
 set <int> First(int n)
 {
-    if(n < 100)
+    if(n < Gap)
     {
         return Firstset[n];
     }
@@ -138,7 +141,86 @@ set <int> First(int n)
     tmp.insert(n);
     return tmp;
 }
+set <int> Follow(int n)
+{
+    if(n < Gap)
+    {
+        return Followsets[n];
+    }
+    set<int> tmp;
+    tmp.insert(n);
+    return tmp;
+}
+int genFollow()
+{
+    Followsets.resize(noncnt);
+    Followsets[START].insert(MaxSetSize);   // $ 加入开始符的 FOLLOW
 
+    int flag;
+    do
+    {
+        flag = 0;
+        int size = grammal.size();
+        for(int i = 0; i < size; i++)
+        {
+            int A = grammal[i].left;            // 产生式左部
+            int len = grammal[i].length;
+
+            for(int j = 0; j < len; j++)
+            {
+                int Xj = grammal[i].right[j];
+                if(Xj >= Gap) continue;          // 终结符没有 FOLLOW 集
+
+                // 计算 First(β)，其中 β = X_{j+1} ... X_{len-1}
+                set<int> firstOfBeta;
+                bool allBetaNullable = true;
+
+                for(int k = j + 1; k < len; k++)
+                {
+                    int sym = grammal[i].right[k];
+                    set<int> fk = First(sym);
+
+                    for(int x : fk)
+                    {
+                        if(x != 100)             // 排除 ε
+                            firstOfBeta.insert(x);
+                    }
+
+                    if(fk.find(100) == fk.end()) // 不可空 → β 不含 ε
+                    {
+                        allBetaNullable = false;
+                        break;
+                    }
+                }
+
+                // 将 First(β) - {ε} 加入 Follow(Xj)
+                for(int x : firstOfBeta)
+                {
+                    if(Followsets[Xj].find(x) == Followsets[Xj].end())
+                    {
+                        Followsets[Xj].insert(x);
+                        flag = 1;
+                    }
+                }
+
+                // 如果 ε ∈ First(β) 或 Xj 是最后一个符号
+                if(allBetaNullable || j == len - 1)
+                {
+                    for(int x : Followsets[A])
+                    {
+                        if(Followsets[Xj].find(x) == Followsets[Xj].end())
+                        {
+                            Followsets[Xj].insert(x);
+                            flag = 1;
+                        }
+                    }
+                }
+            }
+        }
+    } while(flag == 1);
+
+    return 0;
+}
 int genFirst()
 {
     // Firstset 按非终结符编号索引，而不是按产生式编号
@@ -209,7 +291,7 @@ int main()
 
     // 测试 genFirst
     genFirst();
-    cout << "\n========== FIRST  ==========" << endl;
+    cout << "\n========== FIRST 集 ==========" << endl;
     for(int i = 0; i < noncnt; i++)
     {
         cout << "FIRST(" << signset[i] << ") = { ";
@@ -220,6 +302,27 @@ int main()
             else
                 cout << signset[*it];
             if(next(it) != Firstset[i].end())
+                cout << ", ";
+        }
+        cout << " }" << endl;
+    }
+    cout << "==============================" << endl;
+
+    // 测试 genFollow
+    genFollow();
+    cout << "\n========== FOLLOW 集 =========" << endl;
+    for(int i = 0; i < noncnt; i++)
+    {
+        cout << "FOLLOW(" << signset[i] << ") = { ";
+        for(auto it = Followsets[i].begin(); it != Followsets[i].end(); it++)
+        {
+            if(*it == 100)
+                cout << "#";
+            else if(*it == MaxSetSize)
+                cout << "$";
+            else
+                cout << signset[*it];
+            if(next(it) != Followsets[i].end())
                 cout << ", ";
         }
         cout << " }" << endl;
