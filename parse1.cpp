@@ -371,6 +371,9 @@ void addAugmentedProduction() {
     grammal.push_back(aug);
 }
 
+// 前向声明
+bool JudgeLR0(vector<set<LRItem, LRItemCompare>> c);
+
 // 构建整个 LR(0) DFA（项目集规范族）
 void buildLR0DFA() {
     // 初始 Item：S' → ·S $
@@ -450,6 +453,12 @@ void buildLR0DFA() {
     }
     cout << "================================" << endl;
 
+    // 判断是否为 LR(0) 文法
+    if(JudgeLR0(c))
+        cout << "This grammar is LR(0)." << endl;
+    else
+        cout << "This grammar is NOT LR(0) (shift-reduce or reduce-reduce conflict)." << endl;
+
     // === Save DFA as DOT graph file ===
     ofstream dotFile("LR0_DFA.dot");
     dotFile << "digraph LR0_DFA {" << endl;
@@ -481,7 +490,40 @@ void buildLR0DFA() {
     dotFile.close();
     cout << "DFA graph saved to LR0_DFA.dot" << endl;
 }
+bool JudgeLR0(vector<set<LRItem, LRItemCompare>> c)
+{
+    for(auto& state : c)
+    {
+        bool hasShift = false;
+        bool hasReduce = false;
+        int reduceCnt = 0;
 
+        for(auto item : state)
+        {
+            int r = item.rule;
+            int p = item.pos;
+
+            if(p == grammal[r].length) {
+                // 归约项：点在末尾
+                hasReduce = true;
+                reduceCnt++;
+            }
+            else {
+                int X = grammal[r].right[p];
+                if(X >= Gap) {     // ·后是终结符 → 移进
+                    hasShift = true;
+                }
+                // ·后是非终结符 → GoTo 转移，不参与冲突判断
+            }
+        }
+
+        // SR 冲突：既有移进又有归约
+        if(hasShift && hasReduce) return false;
+        // RR 冲突：有两条及以上归约
+        if(reduceCnt > 1) return false;
+    }
+    return true;
+}
 
 
 
