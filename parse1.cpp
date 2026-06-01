@@ -35,7 +35,21 @@ struct LRItem
     int k; 
 };
 
+struct state
+{
+    int no;
+    vector<LRItem> rules;
+};
 
+struct edge
+{
+    int no; // 边的序号
+    int signno;
+};
+
+// LR分析表，后续构建
+vector<vector<int>> LR0_table;
+int tbcnt = 0;
 vector<string> SplitStr(string line, char dep = ' ')
 {
     vector<string> tokens;
@@ -275,58 +289,255 @@ int genFirst()
     return 0;
 }
 
+// ────────── LR(0) DFA 构建 ──────────
+
+// LRItem 比较器，用于 set 去重
+struct LRItemCompare {
+    bool operator()(const LRItem& a, const LRItem& b) const {
+        if(a.rule != b.rule) return a.rule < b.rule;
+        if(a.pos  != b.pos)  return a.pos  < b.pos;
+        return a.k < b.k;
+    }
+};
+
+// 判断两个 LRItem 集合是否相等
+bool itemSetsEqual(const set<LRItem, LRItemCompare>& a,
+                   const set<LRItem, LRItemCompare>& b) {
+    if(a.size() != b.size()) return false;
+    auto ia = a.begin(), ib = b.begin();
+    while(ia != a.end()) {
+        if(ia->rule != ib->rule || ia->pos != ib->pos) return false;
+        ++ia; ++ib;
+    }
+    return true;
+}
+
+// Closure 闭包：反复展开 ·后的非终结符
+set<LRItem, LRItemCompare> closure(set<LRItem, LRItemCompare> I) {
+    set<LRItem, LRItemCompare> result = I;
+    bool changed = true;
+    while(changed) {
+        changed = false;
+        auto snapshot = result;          // 遍历快照，避免迭代器失效
+        for(auto item : snapshot) {
+            int r = item.rule, p = item.pos;
+            if(p >= grammal[r].length) continue;   // ·在末尾，跳过
+
+            int B = grammal[r].right[p];            // ·后的符号
+            if(B >= Gap) continue;                  // 终结符不展开
+
+            // B 是非终结符 → 加入所有 B → ·γ
+            for(int pi = 0; pi < grammal.size(); pi++) {
+                if(grammal[pi].left == B) {
+                    LRItem newItem;
+                    newItem.rule = pi;
+                    newItem.pos  = 0;
+                    newItem.k    = 0;               // LR(0) 不用 preview
+                    if(result.find(newItem) == result.end()) {
+                        result.insert(newItem);
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
+// GoTo 状态转移：点前是 X 的 item，点后移一位，再求闭包
+set<LRItem, LRItemCompare> goTo(set<LRItem, LRItemCompare> I, int X) {
+    set<LRItem, LRItemCompare> J;
+    for(auto item : I) {
+        int r = item.rule, p = item.pos;
+        if(p < grammal[r].length && grammal[r].right[p] == X) {
+            LRItem newItem;
+            newItem.rule = r;
+            newItem.pos  = p + 1;
+            newItem.k    = 0;
+            J.insert(newItem);
+        }
+    }
+    return closure(J);
+}
+
+// 增广产生式：S' → 原开始符 $
+void addAugmentedProduction() {
+    production aug;
+    aug.left = noncnt;
+    signset[noncnt++] = "S'";
+    aug.right[0] = START;
+    aug.right[1] = MaxSetSize;    // $
+    aug.length = 2;
+    grammal.push_back(aug);
+}
+
+// 构建整个 LR(0) DFA（项目集规范族）
+void buildLR0DFA() {
+    // 初始 Item：S' → ·S $
+    LRItem startItem;
+    startItem.rule = grammal.size() - 1;   // 增广产生式是最后一条
+    startItem.pos  = 0;
+    startItem.k    = 0;
+    set<LRItem, LRItemCompare> startSet;
+    startSet.insert(startItem);
+    startSet = closure(startSet);
+
+    // 状态集合
+    vector<set<LRItem, LRItemCompare>> c = {startSet};
+    // 转移边：transitions[源状态] = { (符号, 目标状态), ... }
+    vector<vector<pair<int,int>>> transitions = {{}};
+    vector<int> queue = {0};       // BFS 队列
+    int edgeCnt = 0;
+
+    for(int idx = 0; idx < queue.size(); idx++) {
+        int cur = queue[idx];
+
+        // 收集 ·后的所有符号
+        set<int> symbols;
+        for(auto item : c[cur]) {
+            int r = item.rule, p = item.pos;
+            if(p < grammal[r].length)
+                symbols.insert(grammal[r].right[p]);
+        }
+
+        // 对每个符号做 GoTo
+        for(int X : symbols) {
+            auto newSet = goTo(c[cur], X);
+            if(newSet.empty()) continue;
+
+            // 查重：是否已存在相同状态
+            int found = -1;
+            for(int si = 0; si < c.size(); si++) {
+                if(itemSetsEqual(c[si], newSet)) {
+                    found = si;
+                    break;
+                }
+            }
+
+            if(found == -1) {
+                found = c.size();
+                c.push_back(newSet);
+                queue.push_back(found);
+                transitions.push_back({});
+            }
+
+            transitions[cur].push_back({X, found});
+            edgeCnt++;
+        }
+    }
+
+    // === Print DFA (console) ===
+    cout << "\n========== LR(0) DFA ==========" << endl;
+    cout << c.size() << " states, "
+         << edgeCnt << " edges" << endl << endl;
+
+    for(int si = 0; si < c.size(); si++) {
+        cout << "--- State " << si << " ---" << endl;
+        for(auto item : c[si]) {
+            cout << "  " << signset[grammal[item.rule].left] << " ->";
+            for(int k = 0; k < grammal[item.rule].length; k++) {
+                if(k == item.pos) cout << " .";
+                cout << " " << signset[grammal[item.rule].right[k]];
+            }
+            if(item.pos == grammal[item.rule].length) cout << " .";
+            cout << "  (Rule " << item.rule << ")" << endl;
+        }
+
+        for(auto tr : transitions[si]) {
+            cout << "  --" << signset[tr.first] << "--> State " << tr.second << endl;
+        }
+        if(!transitions[si].empty()) cout << endl;
+    }
+    cout << "================================" << endl;
+
+    // === Save DFA as DOT graph file ===
+    ofstream dotFile("LR0_DFA.dot");
+    dotFile << "digraph LR0_DFA {" << endl;
+    dotFile << "    rankdir=LR;" << endl;
+    dotFile << "    node [shape=box, style=rounded, fontname=\"Consolas\"];" << endl;
+    dotFile << endl;
+
+    for(int si = 0; si < c.size(); si++) {
+        dotFile << "    " << si << " [label=\"State " << si;
+        for(auto item : c[si]) {
+            dotFile << "\\n" << signset[grammal[item.rule].left] << " ->";
+            for(int k = 0; k < grammal[item.rule].length; k++) {
+                if(k == item.pos) dotFile << " .";
+                dotFile << " " << signset[grammal[item.rule].right[k]];
+            }
+            if(item.pos == grammal[item.rule].length) dotFile << " .";
+        }
+        dotFile << "\"];" << endl;
+    }
+    dotFile << endl;
+
+    for(int si = 0; si < c.size(); si++) {
+        for(auto tr : transitions[si]) {
+            dotFile << "    " << si << " -> " << tr.second
+                    << " [label=\"" << signset[tr.first] << "\"];" << endl;
+        }
+    }
+    dotFile << "}" << endl;
+    dotFile.close();
+    cout << "DFA graph saved to LR0_DFA.dot" << endl;
+}
+
+
+
 
 int main()
 {
     saveinfo("testdata.txt");
-    for(auto it : grammal)
+
+    // 添加增广产生式 S' → S $
+    addAugmentedProduction();
+
+    // 计算 FIRST / FOLLOW
+    genFirst();
+    genFollow();
+
+    // Print productions
+    cout << "----- Productions -----" << endl;
+    for(int i = 0; i < grammal.size(); i++)
     {
-        cout<<it.left<<" -> ";
-        for(int i = 0; i < it.length; i++)
-        {
-            cout<<" "<<it.right[i];
-        }
-        cout<<endl;
+        cout << i << ": " << signset[grammal[i].left] << "->";
+        for(int k = 0; k < grammal[i].length; k++)
+            cout << " " << signset[grammal[i].right[k]];
+        cout << endl;
     }
 
-    // 测试 genFirst
-    genFirst();
-    cout << "\n========== FIRST 集 ==========" << endl;
+    // Print FIRST sets
+    cout << "\n========== FIRST Sets ==========" << endl;
     for(int i = 0; i < noncnt; i++)
     {
         cout << "FIRST(" << signset[i] << ") = { ";
         for(auto it = Firstset[i].begin(); it != Firstset[i].end(); it++)
         {
-            if(*it == 100)
-                cout << "#";
-            else
-                cout << signset[*it];
-            if(next(it) != Firstset[i].end())
-                cout << ", ";
+            if(*it == 100) cout << "#";
+            else cout << signset[*it];
+            if(next(it) != Firstset[i].end()) cout << ", ";
         }
         cout << " }" << endl;
     }
-    cout << "==============================" << endl;
+    cout << "================================" << endl;
 
-    // 测试 genFollow
-    genFollow();
-    cout << "\n========== FOLLOW 集 =========" << endl;
+    // Print FOLLOW sets
+    cout << "\n========== FOLLOW Sets =========" << endl;
     for(int i = 0; i < noncnt; i++)
     {
         cout << "FOLLOW(" << signset[i] << ") = { ";
         for(auto it = Followsets[i].begin(); it != Followsets[i].end(); it++)
         {
-            if(*it == 100)
-                cout << "#";
-            else if(*it == MaxSetSize)
-                cout << "$";
-            else
-                cout << signset[*it];
-            if(next(it) != Followsets[i].end())
-                cout << ", ";
+            if(*it == 100) cout << "#";
+            else if(*it == MaxSetSize) cout << "$";
+            else cout << signset[*it];
+            if(next(it) != Followsets[i].end()) cout << ", ";
         }
         cout << " }" << endl;
     }
-    cout << "==============================" << endl;
+    cout << "================================" << endl;
+
+    // 构建 LR(0) DFA
+    buildLR0DFA();
 }
 
