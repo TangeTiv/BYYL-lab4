@@ -1,0 +1,19 @@
+digraph LALR1_DFA {
+    rankdir=LR;
+    node [shape=box, style=rounded, fontname="Consolas"];
+    0 [label="State 0\nA -> . ( A )  [$]\nA -> . a  [$]\nS' -> . A $  [$]"];
+    1 [label="State 1\nS' -> A . $  [$]"];
+    2 [label="State 2\nA -> . ( A )  [)]\nA -> ( . A )  [) $]\nA -> . a  [)]"];
+    3 [label="State 3\nA -> a .  [) $]"];
+    4 [label="State 4\nS' -> A $ .  [$]"];
+    5 [label="State 5\nA -> ( A . )  [) $]"];
+    6 [label="State 6\nA -> ( A ) .  [) $]"];
+    0 -> 1 [label="A"];
+    0 -> 2 [label="("];
+    0 -> 3 [label="a"];
+    1 -> 4 [label="$"];
+    2 -> 5 [label="A"];
+    2 -> 2 [label="("];
+    2 -> 3 [label="a"];
+    5 -> 6 [label=")"];
+}

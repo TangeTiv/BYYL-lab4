@@ -4,6 +4,7 @@
 #include <string>
 #include <fstream>
 #include <set>
+#include <map>
 #include <iterator>
 #include <algorithm>
 #define MaxProLength 20
@@ -305,6 +306,19 @@ struct LRItemCompare {
     }
 };
 
+struct LALRItemCompare {
+    bool operator()(const LRItem& a, const LRItem& b) const {
+        if(a.rule != b.rule) return a.rule < b.rule;
+        if(a.pos  != b.pos)  return a.pos  < b.pos;
+        
+        return false;
+    }
+};
+
+// LR(0) DFA 结果（供 LALR(1) 先行符号传播算法使用）
+vector<set<LRItem, LRItemCompare>> lr0States;
+vector<vector<pair<int,int>>> lr0Transitions;
+
 // 判断两个 LRItem 集合是否相等（含 preview 比较）
 bool itemSetsEqual(const set<LRItem, LRItemCompare>& a,
                    const set<LRItem, LRItemCompare>& b) {
@@ -554,6 +568,10 @@ void buildLR0DFA() {
     dotFile << "}" << endl;
     dotFile.close();
     cout << "LR(0) DFA saved to LR0_DFA.dot" << endl;
+
+    // 保存 LR(0) DFA 结果供 LALR(1) 传播算法使用
+    lr0States = c;
+    lr0Transitions = transitions;
 }
 
 // 构建 LR(1) DFA（项目集规范族）
@@ -666,6 +684,214 @@ void buildLR1DFA() {
     dotFile.close();
     cout << "LR(1) DFA saved to LR1_DFA.dot" << endl;
 }
+
+// ────────── LALR(1) DFA 构建：先行符号传播法 ──────────
+// 算法：DeRemer-Pennello lookahead propagation
+// 直接从 LR(0) DFA 计算 LALR(1) lookaheads，不经过完整 LR(1) 再合并
+void buildLALR1DFA() {
+    int n = lr0States.size();
+
+    // ── ① 初始化 lookahead 集合 ──
+    // la[state][(rule, pos)] = set<int> of lookahead symbols
+    vector<map<pair<int,int>, set<int>>> la(n);
+    for(int si = 0; si < n; si++) {
+        for(auto& item : lr0States[si]) {
+            la[si][{item.rule, item.pos}] = {};
+        }
+    }
+
+    // ── ② 播种：起始项 S' → ·S$ → lookahead = {$} ──
+    int startRule = grammal.size() - 1;
+    la[0][{startRule, 0}].insert(MaxSetSize);
+
+    // ── ③ 迭代传播直至收敛 ──
+    bool changed;
+    do {
+        changed = false;
+
+        for(int si = 0; si < n; si++) {
+            for(auto& item : lr0States[si]) {
+                int r = item.rule, p = item.pos;
+                auto& curLA = la[si][{r, p}];
+                if(curLA.empty()) continue;
+
+                int len = grammal[r].length;
+                if(p >= len) continue;  // 归约项，无可传播
+
+                int X = grammal[r].right[p];  // ·后的符号
+
+                // ── ③a GoTo 传播：沿 DFA 边传下去 ──
+                for(auto& tr : lr0Transitions[si]) {
+                    if(tr.first != X) continue;
+                    int nextState = tr.second;
+                    pair<int,int> nextKey = {r, p + 1};
+                    if(la[nextState].count(nextKey)) {
+                        for(int a : curLA) {
+                            if(la[nextState][nextKey].insert(a).second)
+                                changed = true;
+                        }
+                    }
+                    break;  // 同一符号只对应一个目标状态
+                }
+
+                // ── ③b 闭包传播（·后是非终结符时） ──
+                if(X >= Gap) continue;  // 终结符 → 没有闭包
+
+                // 计算 First(β)，β = right[p+1 ... len-1]
+                set<int> firstOfBeta;
+                bool betaNullable = true;
+                for(int k = p + 1; k < len; k++) {
+                    int sym = grammal[r].right[k];
+                    set<int> fk = First(sym);
+                    for(int x : fk)
+                        if(x != 100) firstOfBeta.insert(x);
+                    if(fk.find(100) == fk.end()) {
+                        betaNullable = false;
+                        break;
+                    }
+                }
+
+                // 遍历 X 的所有产生式 X → γ（即状态中对应的闭包项目）
+                for(int pi = 0; pi < grammal.size(); pi++) {
+                    if(grammal[pi].left != X) continue;
+                    pair<int,int> ck = {pi, 0};
+                    if(!la[si].count(ck)) continue;
+
+                    // 自发生成：First(β) - {ε}
+                    for(int a : firstOfBeta) {
+                        if(la[si][ck].insert(a).second)
+                            changed = true;
+                    }
+                    // 传播：β 全部可空时，将当前 lookahead 复制给闭包项目
+                    if(betaNullable) {
+                        for(int a : curLA) {
+                            if(la[si][ck].insert(a).second)
+                                changed = true;
+                        }
+                    }
+                }
+            }
+        }
+    } while(changed);
+
+    // ── ④ 输出 LALR(1) DFA ──
+    cout << "\n========== LALR(1) DFA =========" << endl;
+    cout << n << " states (same core as LR(0))" << endl << endl;
+    for(int si = 0; si < n; si++) {
+        cout << "--- State " << si << " ---" << endl;
+        for(auto& item : lr0States[si]) {
+            cout << "  " << signset[grammal[item.rule].left] << " ->";
+            for(int k = 0; k < grammal[item.rule].length; k++) {
+                if(k == item.pos) cout << " .";
+                cout << " " << signset[grammal[item.rule].right[k]];
+            }
+            if(item.pos == grammal[item.rule].length) cout << " .";
+            // 显示 lookahead 集合
+            auto& las = la[si][{item.rule, item.pos}];
+            if(!las.empty()) {
+                cout << "  [";
+                bool first = true;
+                for(int a : las) {
+                    if(!first) cout << " ";
+                    first = false;
+                    if(a == 100) cout << "#";
+                    else if(a == MaxSetSize) cout << "$";
+                    else cout << signset[a];
+                }
+                cout << "]";
+            }
+            cout << "  (Rule " << item.rule << ")" << endl;
+        }
+        for(auto& tr : lr0Transitions[si]) {
+            cout << "  --" << signset[tr.first] << "--> State " << tr.second << endl;
+        }
+        if(!lr0Transitions[si].empty()) cout << endl;
+    }
+    cout << "================================" << endl;
+
+    // ── ⑤ LALR(1) 冲突检测 ──
+    bool isLALR = true;
+    for(int si = 0; si < n; si++) {
+        map<int,bool> hasShift;
+        map<int,int> reduceCnt;
+
+        for(auto& item : lr0States[si]) {
+            int r = item.rule, p = item.pos;
+            if(p < grammal[r].length) {
+                int X = grammal[r].right[p];
+                if(X >= Gap) hasShift[X] = true;
+            } else {
+                auto& las = la[si][{r, p}];
+                for(int a : las) {
+                    // 接受项 S' → S $ . 不参与冲突
+                    if(a == MaxSetSize && r == startRule) continue;
+                    reduceCnt[a]++;
+                }
+            }
+        }
+
+        for(auto it = hasShift.begin(); it != hasShift.end(); ++it) {
+            int sym = it->first;
+            if(reduceCnt[sym] > 0) {
+                cout << "  SR conflict in State " << si
+                     << " on symbol " << signset[sym] << endl;
+                isLALR = false;
+            }
+        }
+        for(auto it = reduceCnt.begin(); it != reduceCnt.end(); ++it) {
+            int a = it->first;
+            int cnt = it->second;
+            if(cnt > 1) {
+                cout << "  RR conflict in State " << si
+                     << " on symbol "
+                     << (a == 100 ? "#" : a == MaxSetSize ? "$" : signset[a]) << endl;
+                isLALR = false;
+            }
+        }
+    }
+    if(isLALR)
+        cout << "\nThis grammar is LALR(1)." << endl;
+    else
+        cout << "\nThis grammar is NOT LALR(1)." << endl;
+
+    // ── ⑥ 保存 DOT 图 ──
+    ofstream dotFile("LALR1_DFA.dot");
+    dotFile << "digraph LALR1_DFA {" << endl;
+    dotFile << "    rankdir=LR;" << endl;
+    dotFile << "    node [shape=box, style=rounded, fontname=\"Consolas\"];" << endl;
+    for(int si = 0; si < n; si++) {
+        dotFile << "    " << si << " [label=\"State " << si;
+        for(auto& item : lr0States[si]) {
+            dotFile << "\\n" << signset[grammal[item.rule].left] << " ->";
+            for(int k = 0; k < grammal[item.rule].length; k++) {
+                if(k == item.pos) dotFile << " .";
+                dotFile << " " << signset[grammal[item.rule].right[k]];
+            }
+            if(item.pos == grammal[item.rule].length) dotFile << " .";
+            auto& las = la[si][{item.rule, item.pos}];
+            if(!las.empty()) {
+                dotFile << "  [";
+                bool first = true;
+                for(int a : las) {
+                    if(!first) dotFile << " ";
+                    first = false;
+                    if(a == 100) dotFile << "#";
+                    else if(a == MaxSetSize) dotFile << "$";
+                    else dotFile << signset[a];
+                }
+                dotFile << "]";
+            }
+        }
+        dotFile << "\"];" << endl;
+    }
+    for(int si = 0; si < n; si++)
+        for(auto& tr : lr0Transitions[si])
+            dotFile << "    " << si << " -> " << tr.second
+                    << " [label=\"" << signset[tr.first] << "\"];" << endl;
+    dotFile << "}" << endl;
+    dotFile.close();
+    cout << "LALR(1) DFA saved to LALR1_DFA.dot" << endl;
+}
 bool JudgeLR0(vector<set<LRItem, LRItemCompare>> c)
 {
     for(auto& state : c)
@@ -760,5 +986,8 @@ int main()
 
     // 构建 LR(1) DFA
     buildLR1DFA();
+
+    // 构建 LALR(1) DFA（先行符号传播法）
+    buildLALR1DFA();
 }
 
