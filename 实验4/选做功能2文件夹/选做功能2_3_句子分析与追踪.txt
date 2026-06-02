@@ -1,0 +1,38 @@
+======================================
+  选做功能2&3：句子输入与语法分析追踪
+======================================
+
+一、功能说明
+------------------
+  选做功能2：提供句子输入窗口，用户可以输入要分析的句子。
+  选做功能3：使用 LALR(1) 分析表对输入句子进行分析，
+           以表格形式逐行输出分析过程。
+
+二、分析过程追踪表格
+------------------
+  每行记录一步分析，包含 5 列：
+  | Step | State Stack | Symbol Stack | Remaining Input | Action |
+
+  其中 Action 列包括：
+  - Shift X → N  ：移进符号 X 并转到状态 N
+  - Reduce by Rule N: A → β  ：按产生式 N 归约
+  - Accept        ：接受输入
+  - ERROR         ：语法错误
+
+三、实现位置
+------------------
+  - LALR1Parser::tokenize()     - 句子词法分析
+  - LALR1Parser::parse()        - 语法分析主控程序
+  - LALR1Parser::printTrace()   - 控制台输出追踪
+  - MainWindow::onParseSentence() / populateTraceTable() - Qt 界面
+
+四、使用示例
+------------------
+  文法：A -> ( A ) | a
+  输入：( a )  （注：token 之间需用空格隔开）
+
+  ![](../image/9.png)
+
+  更多示例：
+
+  ![](../image/10.png)

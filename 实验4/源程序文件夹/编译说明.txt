@@ -1,0 +1,52 @@
+======================================
+  LALR(1) 语法分析生成器 — 编译说明
+======================================
+
+一、编译环境要求
+------------------
+  - 操作系统：Windows 10/11
+  - 编译器：MinGW-W64 GCC 13.1.0 或更高版本
+  - Qt 版本：Qt 6.9.1 (MinGW 64-bit) —— 仅编译 Qt 图形界面版需要
+  - 构建工具：qmake（Qt 版）或 MinGW 直接编译（控制台版）
+
+二、Qt 图形界面版编译
+------------------
+  方法1：Qt Creator（推荐）
+    1. 用 Qt Creator 打开 LALR1_Visual.pro
+    2. 选择 "Qt 6.9.1 (MinGW 64-bit)" 构建套件
+    3. 构建 → 重新构建项目
+    4. 运行
+
+  方法2：命令行
+    set PATH=D:\Qt\Tools\mingw1310_64\bin;%PATH%
+    D:\Qt\6.9.1\mingw_64\bin\qmake.exe LALR1_Visual.pro
+    mingw32-make -j4
+    生成的可执行文件：release\LALR1_Visual.exe
+
+三、控制台版编译
+------------------
+  使用 MinGW 直接编译（无需安装 Qt）：
+  g++ -std=c++11 -o parse1.exe main_console.cpp Grammar.cpp DFA.cpp ^
+      LR0DFA.cpp LR1DFA.cpp LALR1DFA.cpp LALR1Parser.cpp
+
+四、运行说明
+------------------
+  - Qt 版需要同目录下的所有 .dll 文件及 platforms\qwindows.dll
+  - 控制台版需要 libstdc++-6.dll 和 libgcc_s_seh-1.dll
+  - 默认文法文件 testdata.txt 放在可执行文件同目录，也可在程序界面中编辑
+  - 测试文法：testdata_simple.txt(括号), testdata_arith.txt(算术),
+    testdata_ifelse.txt(条件), testdata_exp.txt(表达式)
+
+五、文件清单
+------------------
+  common.h            — 常量定义、数据结构、比较器、类型别名
+  Grammar.h/cpp       — 文法类：符号表、产生式、FIRST/FOLLOW
+  DFA.h/cpp           — DFA 抽象基类（模板方法模式）
+  LR0DFA.h/cpp        — LR(0) DFA 构建 + LR(0)/SLR(1) 冲突检测
+  LR1DFA.h/cpp        — LR(1) DFA 构建
+  LALR1DFA.h/cpp      — LALR(1) 先行符号传播（DeRemer-Pennello）
+  LALR1Parser.h/cpp   — ACTION/GOTO 表 + 语法分析驱动
+  mainwindow.h/cpp    — Qt 主窗口界面
+  main.cpp            — Qt 图形界面版入口
+  main_console.cpp    — 控制台版入口
+  LALR1_Visual.pro    — Qt 项目文件

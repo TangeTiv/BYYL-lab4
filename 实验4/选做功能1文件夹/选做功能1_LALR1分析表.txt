@@ -1,0 +1,30 @@
+  选做功能1：LALR(1) 分析表（ACTION + GOTO）
+======================================
+
+一、功能说明
+------------------
+  根据 LALR(1) DFA 的 lookahead 集合，构造 LR 分析表：
+  - ACTION 表：状态 × 终结符，记录移进、归约、接受动作
+  - GOTO 表：状态 × 非终结符，记录归约后的状态转移
+
+二、实现位置
+------------------
+  - LALR1Parser::buildTable()  - 表构造
+  - LALR1Parser::printTable()  - 控制台输出
+  - MainWindow::populateActionTable() / populateGotoTable() - Qt 界面展示
+
+三、表结构
+------------------
+  ACTION[state][terminal] = "sN" | "rN" | "acc"
+  GOTO[state][nonterminal] = target_state
+
+  其中：
+    sN = 移进并转到状态 N
+    rN = 按第 N 条产生式归约
+    acc = 接受输入
+
+四、截图
+------------------
+  LALR(1) 分析表界面（算术表达式文法）：
+
+  ![](../image/8.png)
